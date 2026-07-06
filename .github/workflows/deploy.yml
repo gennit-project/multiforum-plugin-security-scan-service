@@ -1,0 +1,45 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+# Same Workload Identity Federation setup the plugins repo uses
+# (secrets.WIF_PROVIDER / secrets.GCP_SA_EMAIL). Repo/environment variables:
+#   GCP_PROJECT_ID, GCP_REGION, CLOUD_RUN_SERVICE
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'security-scan-service' }}
+      REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      # Builds the Dockerfile via Cloud Build and deploys the image. Only the
+      # backend service account (granted run.invoker by Terraform) can call it,
+      # so it stays private. Secrets are mounted from Secret Manager.
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          gcloud run deploy "${SERVICE}" \
+            --source . \
+            --region "${REGION}" \
+            --no-allow-unauthenticated \
+            --set-secrets "SCAN_API_KEY=scan-api-key:latest,SCAN_VIRUSTOTAL_API_KEY=virustotal-api-key:latest"

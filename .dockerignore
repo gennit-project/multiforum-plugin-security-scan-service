@@ -7,6 +7,6 @@ tests/
 terraform/
 plugin-shim/
 .git/
-.gitlab-ci.yml
+.github/
 .env
 *.md

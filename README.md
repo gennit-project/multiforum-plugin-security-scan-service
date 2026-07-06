@@ -74,10 +74,13 @@ pytest -q
 ## Deployment (GCP Cloud Run)
 
 - **Container:** `Dockerfile` (Python 3.11 slim, non-root, listens on `$PORT`).
-- **CI/CD:** `.gitlab-ci.yml` runs lint → test → build → deploy. GCP auth uses
-  Workload Identity Federation (OIDC, no long-lived keys). Deploy runs on `main`
-  and sets `--no-allow-unauthenticated`, so only the backend's service account
-  (granted `run.invoker`) can call it.
+- **CI/CD:** GitHub Actions, matching the rest of the Multiforum project.
+  `.github/workflows/ci.yml` runs ruff + pytest on every PR and push to `main`.
+  `.github/workflows/deploy.yml` deploys on `main` via `gcloud run deploy
+  --source`, authenticating with Workload Identity Federation (OIDC, no
+  long-lived keys — same `WIF_PROVIDER` / `GCP_SA_EMAIL` secrets as the plugins
+  repo). Deploy sets `--no-allow-unauthenticated`, so only the backend's service
+  account (granted `run.invoker`) can call it.
 - **Infra:** `terraform/` provisions the Cloud Run service, a dedicated runtime
   service account, the two Secret Manager secrets, and the invoker IAM binding.
 
