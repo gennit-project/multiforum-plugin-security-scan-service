@@ -1,0 +1,14 @@
+{
+  "name": "multiforum-plugin-security-attachment-scan",
+  "version": "0.3.0",
+  "description": "Multiforum plugin shim that forwards attachment scans to the Python security-scan service.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

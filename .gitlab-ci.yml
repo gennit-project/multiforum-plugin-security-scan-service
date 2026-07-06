@@ -1,0 +1,93 @@
+# GitLab CI/CD pipeline for the security-scan service.
+#
+# Stages:
+#   lint  – ruff static checks
+#   test  – pytest unit + integration suite
+#   build – build the container image and push to Artifact Registry
+#   deploy– deploy the image to Cloud Run (main branch only)
+#
+# Auth to GCP uses OIDC / Workload Identity Federation (no long-lived JSON key):
+# GitLab issues a signed ID token that GCP exchanges for short-lived credentials.
+# Configure these CI/CD variables in the project settings:
+#   GCP_PROJECT_ID, GCP_REGION, GCP_WIF_PROVIDER, GCP_SERVICE_ACCOUNT,
+#   CLOUD_RUN_SERVICE (defaults below can also be hard-coded).
+
+stages:
+  - lint
+  - test
+  - build
+  - deploy
+
+default:
+  image: python:3.11-slim
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  IMAGE: "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/plugins/security-scan-service:${CI_COMMIT_SHORT_SHA}"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .pip-cache/
+
+.python_setup: &python_setup
+  before_script:
+    - pip install -e ".[dev]"
+
+lint:
+  stage: lint
+  <<: *python_setup
+  script:
+    - ruff check .
+
+test:
+  stage: test
+  <<: *python_setup
+  script:
+    - pytest -q --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+
+# --- GCP auth shared by build + deploy via Workload Identity Federation ------
+.gcp_auth: &gcp_auth
+  image: google/cloud-sdk:slim
+  id_tokens:
+    GCP_ID_TOKEN:
+      aud: https://gitlab.com
+  before_script:
+    - echo "${GCP_ID_TOKEN}" > /tmp/gitlab_oidc_token
+    - |
+      gcloud iam workload-identity-pools create-cred-config "${GCP_WIF_PROVIDER}" \
+        --service-account="${GCP_SERVICE_ACCOUNT}" \
+        --output-file=/tmp/gcp_creds.json \
+        --credential-source-file=/tmp/gitlab_oidc_token
+    - gcloud auth login --cred-file=/tmp/gcp_creds.json
+    - gcloud config set project "${GCP_PROJECT_ID}"
+
+build:
+  stage: build
+  <<: *gcp_auth
+  script:
+    - gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+    - docker build -t "${IMAGE}" .
+    - docker push "${IMAGE}"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+deploy:
+  stage: deploy
+  <<: *gcp_auth
+  script:
+    - |
+      gcloud run deploy "${CLOUD_RUN_SERVICE:-security-scan-service}" \
+        --image="${IMAGE}" \
+        --region="${GCP_REGION}" \
+        --platform=managed \
+        --no-allow-unauthenticated \
+        --set-secrets="SCAN_API_KEY=scan-api-key:latest,SCAN_VIRUSTOTAL_API_KEY=virustotal-api-key:latest"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  environment:
+    name: production
