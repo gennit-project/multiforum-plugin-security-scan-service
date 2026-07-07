@@ -1,13 +1,16 @@
 name: Deploy to Cloud Run
 
+# Manual-only by default so the repo doesn't try (and fail) to deploy on every
+# push before a GCP project is wired up. To enable continuous deployment, add:
+#   push:
+#     branches: [main]
+# and configure the secrets/variables below.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
-# Same Workload Identity Federation setup the plugins repo uses
-# (secrets.WIF_PROVIDER / secrets.GCP_SA_EMAIL). Repo/environment variables:
-#   GCP_PROJECT_ID, GCP_REGION, CLOUD_RUN_SERVICE
+# Requires Workload Identity Federation (same setup the plugins repo uses):
+#   secrets:   WIF_PROVIDER, GCP_SA_EMAIL
+#   variables: GCP_PROJECT_ID, GCP_REGION, CLOUD_RUN_SERVICE
 jobs:
   deploy:
     runs-on: ubuntu-latest
