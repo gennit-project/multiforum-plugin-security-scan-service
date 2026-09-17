@@ -150,22 +150,15 @@ curl -s -X POST http://127.0.0.1:8000/scan \
 
 ## Deploy (Google Cloud Run)
 
-- **Container:** `Dockerfile` (Python 3.11 slim, non‑root, listens on `$PORT`).
-- **CI/CD:** `.github/workflows/ci.yml` runs ruff + pytest; `deploy.yml` runs
-  `gcloud run deploy --source` on `main` via Workload Identity Federation and
-  deploys with `--no-allow-unauthenticated` (only the backend's service account,
-  granted `run.invoker`, can call it).
-- **Terraform:** `terraform/` stands up the Cloud Run service + runtime SA +
-  Secret Manager secrets + invoker IAM binding.
+The supported production workflow provisions infrastructure with Terraform,
+publishes an immutable container, loads secret versions without writing them to
+Terraform state, deploys Cloud Run, and verifies health and authentication.
 
-```bash
-cd terraform
-terraform init
-terraform apply \
-  -var project_id=my-proj \
-  -var image=us-central1-docker.pkg.dev/my-proj/plugins/security-scan-service:latest \
-  -var invoker_service_account=multiforum-backend@my-proj.iam.gserviceaccount.com
-```
+Cloud Run accepts public ingress so a backend hosted outside GCP can reach it;
+`POST /scan` remains protected by the shared `X-API-Key`. See the
+[production deployment runbook](docs/production-deployment.md) for the one-time
+bootstrap, GitHub environment configuration, deployment, verification, secret
+rotation, and rollback procedures.
 
 ---
 

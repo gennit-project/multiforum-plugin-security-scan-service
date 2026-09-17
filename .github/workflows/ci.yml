@@ -28,4 +28,18 @@ jobs:
         run: ruff check .
 
       - name: Test (pytest)
-        run: pytest -q
+        run: pytest --cov=app --cov=scripts --cov-report=term-missing --cov-fail-under=80 -q
+
+      - name: Check bootstrap script syntax
+        run: bash -n scripts/bootstrap_gcp.sh
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Validate Terraform
+        run: |
+          terraform -chdir=terraform fmt -check
+          terraform -chdir=terraform init -backend=false
+          terraform -chdir=terraform validate

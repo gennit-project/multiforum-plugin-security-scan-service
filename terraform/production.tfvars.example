@@ -1,0 +1,13 @@
+project_id          = "your-gcp-project"
+environment         = "production"
+region              = "us-central1"
+service_name        = "security-scan-service"
+artifact_repository = "multiforum-services"
+
+# The workflow supplies an immutable SHA-tagged image at deploy time.
+image = "us-central1-docker.pkg.dev/your-gcp-project/multiforum-services/security-scan-service:git-sha"
+
+# Requests may reach FastAPI, but POST /scan still requires X-API-Key.
+allow_unauthenticated = true
+min_instance_count    = 0
+max_instance_count    = 5
