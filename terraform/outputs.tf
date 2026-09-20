@@ -3,6 +3,19 @@ output "service_url" {
   value       = google_cloud_run_v2_service.service.uri
 }
 
+output "image_repository" {
+  description = "Artifact Registry repository prefix for scanner images."
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}"
+}
+
 output "runtime_service_account" {
   value = google_service_account.runtime.email
+}
+
+output "scan_api_key_secret_id" {
+  value = google_secret_manager_secret.api_key.secret_id
+}
+
+output "virustotal_api_key_secret_id" {
+  value = google_secret_manager_secret.virustotal_api_key.secret_id
 }
