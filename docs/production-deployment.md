@@ -13,7 +13,8 @@ The scanner has one supported production path:
 5. Terraform deploys the image and the verifier checks service health,
    VirusTotal configuration, API-key enforcement, and an optional safe fixture.
 6. A pinned `mfctl` authenticates with OAuth client credentials and reconciles
-   the plugin version, scanner URL, security policy, and shared API key.
+   the plugin version, scanner URL, security policy, shared API key, and server
+   download pipelines.
 
 Cloud Run permits requests to reach FastAPI, but the `POST /scan` route
 requires `X-API-Key`. The public `GET /health` route contains no secret data.
@@ -103,14 +104,21 @@ is intentionally manual until the production integration is stable.
 
 A successful run prints the Cloud Run URL and reconciliation result in its job
 summary. After service verification, the workflow installs/enables
-`security-attachment-scan` v0.5.0 and reconciles the URL, security policy, and
-matching `SCAN_SERVICE_API_KEY` without writing the key to the manifest,
-Terraform state, or logs.
+`security-attachment-scan` v0.5.0 and reconciles the URL, security policy,
+matching `SCAN_SERVICE_API_KEY`, and all three server download pipelines
+without writing the key to the manifest, Terraform state, or logs.
 
-The generated desired state deliberately omits `pipelines`, so this deployment
-cannot replace existing server pipeline definitions. Pipeline topology remains
-managed in Multiforum until it is imported into the declarative environment
-with a separately reviewed rollout policy.
+The desired state is authoritative for the complete server pipeline list. It
+matches the imported production topology: the security scanner is the only
+step for `downloadableFile.created`, `downloadableFile.updated`, and
+`downloadableFile.downloaded`; each pipeline stops on failure and uses
+`ALL_FILES_IMMEDIATE`. Generated `effectiveAt` and `policyId` values remain
+server-owned and are intentionally omitted, preventing perpetual drift.
+
+Because reconciliation replaces the complete server pipeline list, add any
+future server-scoped plugin pipeline to the renderer before deploying it. A
+manually added server pipeline that is absent from this desired state will be
+reported as drift and removed by the next successful deployment.
 
 ## Verify or diagnose from a terminal
 

@@ -5,6 +5,8 @@ import pytest
 
 from scripts.render_multiforum_configuration import (
     API_VERSION,
+    PIPELINE_APPLICABILITY,
+    PIPELINE_EVENTS,
     PLUGIN_ID,
     PLUGIN_VERSION,
     build_manifest,
@@ -13,7 +15,7 @@ from scripts.render_multiforum_configuration import (
 )
 
 
-def test_build_manifest_wires_service_and_secret_without_managing_pipelines() -> None:
+def test_build_manifest_wires_service_secret_and_security_pipelines() -> None:
     manifest = build_manifest(
         service_url="https://scanner-abc.run.app/",
         block_on="suspicious",
@@ -41,14 +43,53 @@ def test_build_manifest_wires_service_and_secret_without_managing_pipelines() ->
                 ],
             }
         ],
+        "pipelines": [
+            {
+                "event": event,
+                "steps": [
+                    {
+                        "pluginId": PLUGIN_ID,
+                        "version": PLUGIN_VERSION,
+                        "continueOnError": False,
+                        "condition": "ALWAYS",
+                    }
+                ],
+                "stopOnFirstFailure": True,
+                "applicability": PIPELINE_APPLICABILITY,
+            }
+            for event in PIPELINE_EVENTS
+        ],
     }
-    assert "pipelines" not in manifest
     secret_reference = manifest["plugins"][0]["secretRefs"][0]
     assert secret_reference == {
         "key": "SCAN_SERVICE_API_KEY",
         "valueFrom": "env:SCAN_API_KEY",
     }
     assert "value" not in secret_reference
+
+
+def test_manifest_manages_each_supported_download_event_once() -> None:
+    manifest = build_manifest(service_url="https://scanner.example.test")
+    pipelines = manifest["pipelines"]
+
+    assert tuple(pipeline["event"] for pipeline in pipelines) == PIPELINE_EVENTS
+    assert len({pipeline["event"] for pipeline in pipelines}) == len(PIPELINE_EVENTS)
+    assert all(
+        pipeline["applicability"] == "ALL_FILES_IMMEDIATE"
+        and pipeline["stopOnFirstFailure"] is True
+        for pipeline in pipelines
+    )
+    assert all(
+        pipeline["steps"] == [
+            {
+                "pluginId": "security-attachment-scan",
+                "version": "0.5.0",
+                "continueOnError": False,
+                "condition": "ALWAYS",
+            }
+        ]
+        for pipeline in pipelines
+    )
 
 
 @pytest.mark.parametrize(
