@@ -10,7 +10,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 API_VERSION = "multiforum.gennit.dev/v1alpha1"
 PLUGIN_ID = "security-attachment-scan"
-PLUGIN_VERSION = "0.5.0"
+PLUGIN_VERSION = "0.5.1"
 PIPELINE_APPLICABILITY = "ALL_FILES_IMMEDIATE"
 PIPELINE_EVENTS = (
     "downloadableFile.created",

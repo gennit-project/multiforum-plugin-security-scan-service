@@ -94,6 +94,13 @@ GET  /health                       → { status, version, virustotal_configured 
 POST /scan   (X-API-Key required)  → ScanResult
 ```
 
+Callers may send an `X-Correlation-ID` containing up to 128 letters, numbers,
+dots, underscores, colons, or hyphens. The service echoes it in the response
+header and writes structured `scan_started`, `scan_completed`, or `scan_failed`
+log entries containing that ID. When the header is omitted, the service
+generates one. Multiforum uses the plugin job ID, so a pipeline diagnostic's
+`correlationId` can be searched directly in Cloud Run logs.
+
 **Request**
 
 ```json
@@ -143,6 +150,7 @@ Try a scan:
 ```bash
 curl -s -X POST http://127.0.0.1:8000/scan \
   -H 'content-type: application/json' -H 'x-api-key: <your SCAN_API_KEY>' \
+  -H 'x-correlation-id: local-test-1' \
   -d '{"file_url":"https://example.com/bundle.zip"}'
 ```
 
