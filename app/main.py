@@ -8,14 +8,20 @@ Endpoints
 
 from __future__ import annotations
 
+import json
+import logging
+from uuid import uuid4
+
 import httpx
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Header, Response
 
 from . import __version__
 from .config import Settings, get_settings
 from .models import HealthResponse, ScanRequest, ScanResult
 from .scanning.orchestrator import Scanner
 from .security import require_api_key
+
+logger = logging.getLogger(__name__)
 
 
 def get_http_client() -> httpx.AsyncClient | None:
@@ -50,8 +56,42 @@ async def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
 )
 async def scan(
     request: ScanRequest,
+    response: Response,
+    x_correlation_id: str | None = Header(
+        default=None,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    ),
     settings: Settings = Depends(get_settings),
     http_client: httpx.AsyncClient | None = Depends(get_http_client),
 ) -> ScanResult:
+    correlation_id = x_correlation_id or str(uuid4())
+    response.headers["X-Correlation-ID"] = correlation_id
+    logger.info(
+        json.dumps(
+            {"event": "scan_started", "correlation_id": correlation_id},
+            sort_keys=True,
+        )
+    )
     scanner = Scanner(settings, http_client=http_client)
-    return await scanner.scan(request)
+    try:
+        result = await scanner.scan(request)
+    except Exception:
+        logger.exception(
+            json.dumps(
+                {"event": "scan_failed", "correlation_id": correlation_id},
+                sort_keys=True,
+            )
+        )
+        raise
+    logger.info(
+        json.dumps(
+            {
+                "event": "scan_completed",
+                "correlation_id": correlation_id,
+                "verdict": result.verdict.value,
+            },
+            sort_keys=True,
+        )
+    )
+    return result

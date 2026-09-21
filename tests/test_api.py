@@ -6,6 +6,9 @@ dependency, and settings are overridden so no real env/secret is needed.
 
 from __future__ import annotations
 
+import json
+import logging
+
 import httpx
 from fastapi.testclient import TestClient
 
@@ -54,6 +57,58 @@ def test_scan_clean_zip_returns_clean_verdict():
             headers={"X-API-Key": "test-key"},
         )
     assert response.json()["verdict"] == "clean"
+
+
+def test_scan_echoes_and_logs_correlation_id(caplog):
+    _install_overrides(file_bytes=make_zip({"README.md": b"# hi", "a.png": b"PNG"}))
+    with caplog.at_level(logging.INFO, logger="app.main"):
+        with TestClient(app) as client:
+            response = client.post(
+                "/scan",
+                json={"file_url": ATTACHMENT_URL},
+                headers={
+                    "X-API-Key": "test-key",
+                    "X-Correlation-ID": "plugin-run-123",
+                },
+            )
+
+    assert response.headers["X-Correlation-ID"] == "plugin-run-123"
+    records = [json.loads(record.message) for record in caplog.records]
+    assert records == [
+        {"correlation_id": "plugin-run-123", "event": "scan_started"},
+        {
+            "correlation_id": "plugin-run-123",
+            "event": "scan_completed",
+            "verdict": "clean",
+        },
+    ]
+
+
+def test_scan_generates_correlation_id_when_header_is_absent():
+    _install_overrides(file_bytes=make_zip({"README.md": b"# hi", "a.png": b"PNG"}))
+    with TestClient(app) as client:
+        response = client.post(
+            "/scan",
+            json={"file_url": ATTACHMENT_URL},
+            headers={"X-API-Key": "test-key"},
+        )
+
+    assert response.headers["X-Correlation-ID"]
+
+
+def test_scan_rejects_unsafe_correlation_id():
+    _install_overrides(file_bytes=make_zip({"README.md": b"# hi", "a.png": b"PNG"}))
+    with TestClient(app) as client:
+        response = client.post(
+            "/scan",
+            json={"file_url": ATTACHMENT_URL},
+            headers={
+                "X-API-Key": "test-key",
+                "X-Correlation-ID": "unsafe value",
+            },
+        )
+
+    assert response.status_code == 422
 
 
 def test_scan_flags_executable_as_malicious():
