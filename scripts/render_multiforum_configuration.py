@@ -11,6 +11,12 @@ from urllib.parse import urlsplit, urlunsplit
 API_VERSION = "multiforum.gennit.dev/v1alpha1"
 PLUGIN_ID = "security-attachment-scan"
 PLUGIN_VERSION = "0.5.0"
+PIPELINE_APPLICABILITY = "ALL_FILES_IMMEDIATE"
+PIPELINE_EVENTS = (
+    "downloadableFile.created",
+    "downloadableFile.updated",
+    "downloadableFile.downloaded",
+)
 
 
 def normalize_service_url(value: str) -> str:
@@ -41,6 +47,13 @@ def build_manifest(
     if on_error not in {"block", "allow"}:
         raise ValueError("on_error must be block or allow")
 
+    pipeline_step = {
+        "pluginId": PLUGIN_ID,
+        "version": PLUGIN_VERSION,
+        "continueOnError": False,
+        "condition": "ALWAYS",
+    }
+
     return {
         "apiVersion": API_VERSION,
         "plugins": [
@@ -61,6 +74,15 @@ def build_manifest(
                     }
                 ],
             }
+        ],
+        "pipelines": [
+            {
+                "event": event,
+                "steps": [pipeline_step.copy()],
+                "stopOnFirstFailure": True,
+                "applicability": PIPELINE_APPLICABILITY,
+            }
+            for event in PIPELINE_EVENTS
         ],
     }
 
