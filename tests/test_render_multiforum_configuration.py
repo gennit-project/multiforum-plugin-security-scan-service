@@ -83,7 +83,7 @@ def test_manifest_manages_each_supported_download_event_once() -> None:
         pipeline["steps"] == [
             {
                 "pluginId": "security-attachment-scan",
-                "version": "0.5.0",
+                "version": "0.5.1",
                 "continueOnError": False,
                 "condition": "ALWAYS",
             }

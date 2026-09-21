@@ -104,7 +104,7 @@ is intentionally manual until the production integration is stable.
 
 A successful run prints the Cloud Run URL and reconciliation result in its job
 summary. After service verification, the workflow installs/enables
-`security-attachment-scan` v0.5.0 and reconciles the URL, security policy,
+`security-attachment-scan` v0.5.1 and reconciles the URL, security policy,
 matching `SCAN_SERVICE_API_KEY`, and all three server download pipelines
 without writing the key to the manifest, Terraform state, or logs.
 
