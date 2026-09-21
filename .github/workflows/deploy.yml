@@ -30,6 +30,12 @@ jobs:
       TF_VAR_artifact_repository: ${{ vars.ARTIFACT_REPOSITORY || 'multiforum-services' }}
       SCAN_API_KEY: ${{ secrets.SCAN_API_KEY }}
       SCAN_VIRUSTOTAL_API_KEY: ${{ secrets.SCAN_VIRUSTOTAL_API_KEY }}
+      MULTIFORUM_GRAPHQL_URL: ${{ vars.MULTIFORUM_GRAPHQL_URL }}
+      MULTIFORUM_OAUTH_TOKEN_URL: ${{ vars.MULTIFORUM_OAUTH_TOKEN_URL }}
+      MULTIFORUM_OAUTH_CLIENT_ID: ${{ vars.MULTIFORUM_OAUTH_CLIENT_ID }}
+      MULTIFORUM_OAUTH_CLIENT_SECRET: ${{ secrets.MULTIFORUM_OAUTH_CLIENT_SECRET }}
+      MULTIFORUM_OAUTH_AUDIENCE: ${{ vars.MULTIFORUM_OAUTH_AUDIENCE }}
+      MULTIFORUM_OAUTH_SCOPE: plugin-configuration:write
 
     steps:
       - name: Check out source
@@ -49,6 +55,11 @@ jobs:
             TF_STATE_BUCKET
             SCAN_API_KEY
             SCAN_VIRUSTOTAL_API_KEY
+            MULTIFORUM_GRAPHQL_URL
+            MULTIFORUM_OAUTH_TOKEN_URL
+            MULTIFORUM_OAUTH_CLIENT_ID
+            MULTIFORUM_OAUTH_CLIENT_SECRET
+            MULTIFORUM_OAUTH_AUDIENCE
           )
           for name in "${required[@]}"; do
             if [[ -z "${!name:-}" ]]; then
@@ -152,3 +163,48 @@ jobs:
             exit 1
           fi
           python scripts/verify_deployment.py --service-url "${{ steps.service.outputs.url }}" --api-key "${SCAN_API_KEY}" --require-virustotal --test-file-url "${SCAN_TEST_FILE_URL}" --expected-verdict clean
+
+      # Pin mfctl to the reviewed backend merge containing the v1alpha1
+      # reconciliation contract and scoped client-credentials authentication.
+      - name: Check out Multiforum operator CLI
+        uses: actions/checkout@v4
+        with:
+          repository: gennit-project/multiforum-backend
+          ref: ad03cd921bfdf9fe510c029b54dc66055fc0bffe
+          path: .mfctl
+
+      - name: Set up Node for mfctl
+        uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+
+      - name: Install pinned mfctl dependencies
+        working-directory: .mfctl
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.28.2 --activate
+          pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Render Multiforum plugin configuration
+        env:
+          SCAN_BLOCK_ON: ${{ vars.SCAN_BLOCK_ON || 'malicious' }}
+          SCAN_ON_ERROR: ${{ vars.SCAN_ON_ERROR || 'block' }}
+        run: >-
+          python scripts/render_multiforum_configuration.py
+          --service-url "${{ steps.service.outputs.url }}"
+          --block-on "${SCAN_BLOCK_ON}"
+          --on-error "${SCAN_ON_ERROR}"
+          --output "${RUNNER_TEMP}/security-scan-plugin-configuration.json"
+
+      - name: Reconcile Multiforum plugin configuration
+        working-directory: .mfctl
+        run: >-
+          pnpm mfctl plugin-config apply
+          --manifest "${RUNNER_TEMP}/security-scan-plugin-configuration.json"
+
+      - name: Record reconciliation result
+        run: |
+          echo "### Multiforum reconciliation" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Plugin: security-attachment-scan v0.5.0" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Service URL and shared API key: reconciled" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Server pipelines: unchanged by this workflow" >> "${GITHUB_STEP_SUMMARY}"

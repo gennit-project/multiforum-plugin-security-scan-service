@@ -12,6 +12,8 @@ The scanner has one supported production path:
    entering Terraform state.
 5. Terraform deploys the image and the verifier checks service health,
    VirusTotal configuration, API-key enforcement, and an optional safe fixture.
+6. A pinned `mfctl` authenticates with OAuth client credentials and reconciles
+   the plugin version, scanner URL, security policy, and shared API key.
 
 Cloud Run permits requests to reach FastAPI, but the `POST /scan` route
 requires `X-API-Key`. The public `GET /health` route contains no secret data.
@@ -29,7 +31,9 @@ without storing a long-lived Google service-account key there.
 | Scanner and VirusTotal secret values | GitHub `production` environment secrets |
 | Runtime copies of secrets | Google Secret Manager |
 | Safe end-to-end fixture | `SCAN_TEST_FILE_URL` GitHub environment variable |
-| Multiforum plugin setting | Terraform `service_url` output |
+| Multiforum plugin desired state | `scripts/render_multiforum_configuration.py` |
+| Multiforum scanner URL | Terraform `service_url` output, reconciled by `mfctl` |
+| Multiforum scanner secret | `SCAN_API_KEY`, transferred ephemerally by `mfctl` |
 
 Terraform deliberately manages secret containers and access policies but not
 secret values. This prevents plaintext keys from being written into Terraform
@@ -61,6 +65,8 @@ Create a GitHub environment named `production`. Add:
 - `SCAN_API_KEY`: at least 32 random characters. Store this in a password
   manager because the Multiforum plugin must receive the identical value.
 - `SCAN_VIRUSTOTAL_API_KEY`: the VirusTotal API key used only by the scanner.
+- `MULTIFORUM_OAUTH_CLIENT_SECRET`: the client secret for the narrowly scoped
+  Multiforum plugin-configuration automation identity.
 
 For example, generate the shared scanner key locally with:
 
@@ -72,23 +78,39 @@ openssl rand -hex 32
 
 - `SCAN_TEST_FILE_URL`: a stable, non-sensitive URL for a known-safe ZIP test
   fixture. The default deployment requires it and expects a `clean` verdict.
+- `MULTIFORUM_GRAPHQL_URL`: the production Multiforum GraphQL endpoint.
+- `MULTIFORUM_OAUTH_TOKEN_URL`: the OAuth provider's HTTPS token endpoint.
+- `MULTIFORUM_OAUTH_CLIENT_ID`: the automation application's client ID.
+- `MULTIFORUM_OAUTH_AUDIENCE`: the Multiforum API audience.
+
+The Multiforum backend must allowlist the automation token's exact `sub` claim
+in `PLUGIN_CONFIGURATION_AUTOMATION_SUBJECTS`. The identity must receive only
+the `plugin-configuration:write` permission. It can call the reconciliation
+preview and apply operations, but it is not a Multiforum user and cannot call
+other administrative operations.
 
 Optional repository variables are:
 
 - `CLOUD_RUN_SERVICE` (default `security-scan-service`)
 - `ARTIFACT_REPOSITORY` (default `multiforum-services`)
+- `SCAN_BLOCK_ON` (`malicious` by default; may be `suspicious`)
+- `SCAN_ON_ERROR` (`block` by default; may be `allow`)
 
 ## Deploy
 
 Run **Deploy security scanner** from the repository's Actions tab. The workflow
 is intentionally manual until the production integration is stable.
 
-A successful run prints the Cloud Run URL in its job summary. Configure that
-value as the `security-attachment-scan` plugin's `serviceUrl`, and configure
-the same `SCAN_API_KEY` value as the plugin's `SCAN_SERVICE_API_KEY` secret.
+A successful run prints the Cloud Run URL and reconciliation result in its job
+summary. After service verification, the workflow installs/enables
+`security-attachment-scan` v0.5.0 and reconciles the URL, security policy, and
+matching `SCAN_SERVICE_API_KEY` without writing the key to the manifest,
+Terraform state, or logs.
 
-Phase 2 will automate that final Multiforum reconciliation. In Phase 1 those are
-the only two values that still need to be transferred to Multiforum.
+The generated desired state deliberately omits `pipelines`, so this deployment
+cannot replace existing server pipeline definitions. Pipeline topology remains
+managed in Multiforum until it is imported into the declarative environment
+with a separately reviewed rollout policy.
 
 ## Verify or diagnose from a terminal
 
@@ -108,9 +130,9 @@ The verifier never prints the API key or test-file URL.
 
 1. Replace the relevant GitHub `production` environment secret.
 2. Run the deployment workflow.
-3. If rotating `SCAN_API_KEY`, immediately update the Multiforum
-   `SCAN_SERVICE_API_KEY` plugin secret to the same value.
-4. Run the verifier and then retry a quarantined test download.
+3. The workflow updates the Cloud Run secret and Multiforum's matching
+   `SCAN_SERVICE_API_KEY` in the same run.
+4. Confirm the reconciliation summary, then retry a quarantined test download.
 
 Secret Manager retains older versions for recovery and audit purposes. Disable
 old versions after the new configuration has been verified.
