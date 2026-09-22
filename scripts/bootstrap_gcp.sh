@@ -34,6 +34,21 @@ if ! gcloud iam service-accounts describe "${deploy_email}" >/dev/null 2>&1; the
   gcloud iam service-accounts create "${DEPLOY_SERVICE_ACCOUNT}" --display-name="Security scanner GitHub deployer"
 fi
 
+# A newly created service account can take a few seconds to become visible to
+# project IAM. Without this wait, the first bootstrap attempt can fail while
+# adding roles even though service-account creation succeeded.
+for attempt in {1..12}; do
+  if gcloud iam service-accounts describe "${deploy_email}" >/dev/null 2>&1; then
+    break
+  fi
+  if (( attempt == 12 )); then
+    echo "Service account did not become available: ${deploy_email}" >&2
+    exit 1
+  fi
+  echo "Waiting for service account propagation (${attempt}/12)..."
+  sleep 5
+done
+
 project_roles=(
   roles/artifactregistry.admin
   roles/iam.serviceAccountAdmin
@@ -80,6 +95,11 @@ Still required in the GitHub production environment:
   secrets.SCAN_API_KEY
   secrets.SCAN_VIRUSTOTAL_API_KEY
   vars.SCAN_TEST_FILE_URL
+  vars.MULTIFORUM_GRAPHQL_URL
+  vars.MULTIFORUM_OAUTH_TOKEN_URL
+  vars.MULTIFORUM_OAUTH_CLIENT_ID
+  secrets.MULTIFORUM_OAUTH_CLIENT_SECRET
+  vars.MULTIFORUM_OAUTH_AUDIENCE
 
 Keep a secure copy of SCAN_API_KEY: Multiforum must use the same value as its
 security-attachment-scan plugin secret.
