@@ -22,7 +22,7 @@ for command in gcloud gh; do
 done
 
 gcloud config set project "${GCP_PROJECT_ID}"
-gcloud services enable iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com storage.googleapis.com serviceusage.googleapis.com
+gcloud services enable cloudresourcemanager.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com storage.googleapis.com serviceusage.googleapis.com
 
 if ! gcloud storage buckets describe "gs://${TF_STATE_BUCKET}" >/dev/null 2>&1; then
   gcloud storage buckets create "gs://${TF_STATE_BUCKET}" --location="${GCP_REGION}" --uniform-bucket-level-access

@@ -83,6 +83,10 @@ resource "google_cloud_run_v2_service" "service" {
   labels   = local.labels
 
   template {
+    labels = {
+      deployment_revision = var.deployment_revision
+    }
+
     service_account                  = google_service_account.runtime.email
     timeout                          = "120s"
     max_instance_request_concurrency = 4

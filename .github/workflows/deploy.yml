@@ -28,6 +28,7 @@ jobs:
       TF_VAR_region: ${{ vars.GCP_REGION || 'us-central1' }}
       TF_VAR_service_name: ${{ vars.CLOUD_RUN_SERVICE || 'security-scan-service' }}
       TF_VAR_artifact_repository: ${{ vars.ARTIFACT_REPOSITORY || 'multiforum-services' }}
+      TF_VAR_deployment_revision: run-${{ github.run_id }}-${{ github.run_attempt }}
       SCAN_API_KEY: ${{ secrets.SCAN_API_KEY }}
       SCAN_VIRUSTOTAL_API_KEY: ${{ secrets.SCAN_VIRUSTOTAL_API_KEY }}
       MULTIFORUM_GRAPHQL_URL: ${{ vars.MULTIFORUM_GRAPHQL_URL }}
@@ -170,7 +171,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: gennit-project/multiforum-backend
-          ref: ad03cd921bfdf9fe510c029b54dc66055fc0bffe
+          ref: 304aa3046c03e2bd91dd9ad2e8c8f378f32c9447
           path: .mfctl
 
       - name: Set up Node for mfctl
