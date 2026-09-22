@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.scanning.zip_inspector import analyze_zip_bytes
 
 from .fixtures import make_zip, make_zip_bomb
@@ -23,6 +25,15 @@ def test_clean_zip_passes():
     content = make_zip({"art/wallpaper.png": b"\x89PNG data", "notes.txt": b"hi"})
     result = analyze_zip_bytes(content, **DEFAULTS)
     assert result.ok is True
+
+
+def test_deployment_fixture_passes():
+    fixture = Path(__file__).parents[1] / "fixtures" / "known-safe.zip"
+    result = analyze_zip_bytes(fixture.read_bytes(), **DEFAULTS)
+
+    assert result.is_zip is True
+    assert result.ok is True
+    assert result.has_readme is True
 
 
 def test_blocked_executable_is_flagged():
