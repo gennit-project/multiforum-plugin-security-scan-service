@@ -31,6 +31,12 @@ variable "artifact_repository" {
   default     = "multiforum-services"
 }
 
+variable "deployment_revision" {
+  type        = string
+  description = "Deployment identifier that forces a new revision when secrets rotate."
+  default     = "manual"
+}
+
 variable "allow_unauthenticated" {
   type        = bool
   description = "Allow requests to reach FastAPI. The /scan route still requires X-API-Key."

@@ -28,6 +28,7 @@ jobs:
       TF_VAR_region: ${{ vars.GCP_REGION || 'us-central1' }}
       TF_VAR_service_name: ${{ vars.CLOUD_RUN_SERVICE || 'security-scan-service' }}
       TF_VAR_artifact_repository: ${{ vars.ARTIFACT_REPOSITORY || 'multiforum-services' }}
+      TF_VAR_deployment_revision: run-${{ github.run_id }}-${{ github.run_attempt }}
       SCAN_API_KEY: ${{ secrets.SCAN_API_KEY }}
       SCAN_VIRUSTOTAL_API_KEY: ${{ secrets.SCAN_VIRUSTOTAL_API_KEY }}
       MULTIFORUM_GRAPHQL_URL: ${{ vars.MULTIFORUM_GRAPHQL_URL }}
