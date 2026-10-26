@@ -31,12 +31,6 @@ jobs:
       TF_VAR_deployment_revision: run-${{ github.run_id }}-${{ github.run_attempt }}
       SCAN_API_KEY: ${{ secrets.SCAN_API_KEY }}
       SCAN_VIRUSTOTAL_API_KEY: ${{ secrets.SCAN_VIRUSTOTAL_API_KEY }}
-      MULTIFORUM_GRAPHQL_URL: ${{ vars.MULTIFORUM_GRAPHQL_URL }}
-      MULTIFORUM_OAUTH_TOKEN_URL: ${{ vars.MULTIFORUM_OAUTH_TOKEN_URL }}
-      MULTIFORUM_OAUTH_CLIENT_ID: ${{ vars.MULTIFORUM_OAUTH_CLIENT_ID }}
-      MULTIFORUM_OAUTH_CLIENT_SECRET: ${{ secrets.MULTIFORUM_OAUTH_CLIENT_SECRET }}
-      MULTIFORUM_OAUTH_AUDIENCE: ${{ vars.MULTIFORUM_OAUTH_AUDIENCE }}
-      MULTIFORUM_OAUTH_SCOPE: plugin-configuration:write
 
     steps:
       - name: Check out source
@@ -56,11 +50,6 @@ jobs:
             TF_STATE_BUCKET
             SCAN_API_KEY
             SCAN_VIRUSTOTAL_API_KEY
-            MULTIFORUM_GRAPHQL_URL
-            MULTIFORUM_OAUTH_TOKEN_URL
-            MULTIFORUM_OAUTH_CLIENT_ID
-            MULTIFORUM_OAUTH_CLIENT_SECRET
-            MULTIFORUM_OAUTH_AUDIENCE
           )
           for name in "${required[@]}"; do
             if [[ -z "${!name:-}" ]]; then
@@ -165,48 +154,11 @@ jobs:
           fi
           python scripts/verify_deployment.py --service-url "${{ steps.service.outputs.url }}" --api-key "${SCAN_API_KEY}" --require-virustotal --test-file-url "${SCAN_TEST_FILE_URL}" --expected-verdict clean
 
-      # Pin mfctl to the reviewed backend merge containing the v1alpha1
-      # reconciliation contract and scoped client-credentials authentication.
-      - name: Check out Multiforum operator CLI
-        uses: actions/checkout@v4
-        with:
-          repository: gennit-project/multiforum-backend
-          ref: 304aa3046c03e2bd91dd9ad2e8c8f378f32c9447
-          path: .mfctl
-
-      - name: Set up Node for mfctl
-        uses: actions/setup-node@v4
-        with:
-          node-version: "26"
-
-      - name: Install pinned mfctl dependencies
-        working-directory: .mfctl
+      - name: Record central reconciliation handoff
         run: |
-          corepack enable
-          corepack prepare pnpm@10.28.2 --activate
-          pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Render Multiforum plugin configuration
-        env:
-          SCAN_BLOCK_ON: ${{ vars.SCAN_BLOCK_ON || 'malicious' }}
-          SCAN_ON_ERROR: ${{ vars.SCAN_ON_ERROR || 'block' }}
-        run: >-
-          python scripts/render_multiforum_configuration.py
-          --service-url "${{ steps.service.outputs.url }}"
-          --block-on "${SCAN_BLOCK_ON}"
-          --on-error "${SCAN_ON_ERROR}"
-          --output "${RUNNER_TEMP}/security-scan-plugin-configuration.json"
-
-      - name: Reconcile Multiforum plugin configuration
-        working-directory: .mfctl
-        run: >-
-          pnpm mfctl plugin-config apply
-          --manifest "${RUNNER_TEMP}/security-scan-plugin-configuration.json"
-
-      - name: Record reconciliation result
-        run: |
-          echo "### Multiforum reconciliation" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Plugin: security-attachment-scan v0.5.1" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Service URL and shared API key: reconciled" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Server pipelines: created, updated, and downloaded events reconciled" >> "${GITHUB_STEP_SUMMARY}"
-          echo "- Pipeline applicability: all files, immediate enforcement" >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo "### Multiforum reconciliation handoff"
+            echo "- Set the backend production environment variable \`SCAN_SERVICE_URL\` to: ${{ steps.service.outputs.url }}"
+            echo "- Run the central [production plugin reconciliation](https://github.com/gennit-project/multiforum-backend/actions/workflows/production-plugin-configuration.yml)."
+            echo "- This service workflow does not own or replace the shared server pipeline list."
+          } >> "${GITHUB_STEP_SUMMARY}"

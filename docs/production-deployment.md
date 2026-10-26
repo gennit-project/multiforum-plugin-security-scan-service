@@ -12,9 +12,9 @@ The scanner has one supported production path:
    entering Terraform state.
 5. Terraform deploys the image and the verifier checks service health,
    VirusTotal configuration, API-key enforcement, and an optional safe fixture.
-6. A pinned `mfctl` authenticates with OAuth client credentials and reconciles
-   the plugin version, scanner URL, security policy, shared API key, and server
-   download pipelines.
+6. The job summary hands the deployed URL to the central Multiforum production
+   plugin configuration workflow; this service never replaces shared server
+   pipeline topology.
 
 Cloud Run permits requests to reach FastAPI, but the `POST /scan` route
 requires `X-API-Key`. The public `GET /health` route contains no secret data.
@@ -32,9 +32,9 @@ without storing a long-lived Google service-account key there.
 | Scanner and VirusTotal secret values | GitHub `production` environment secrets |
 | Runtime copies of secrets | Google Secret Manager |
 | Safe end-to-end fixture | `SCAN_TEST_FILE_URL` GitHub environment variable |
-| Multiforum plugin desired state | `scripts/render_multiforum_configuration.py` |
-| Multiforum scanner URL | Terraform `service_url` output, reconciled by `mfctl` |
-| Multiforum scanner secret | `SCAN_API_KEY`, transferred ephemerally by `mfctl` |
+| Multiforum plugin desired state | `gennit-project/multiforum-backend` central production template |
+| Multiforum scanner URL | Terraform `service_url` output, copied to the central workflow's `SCAN_SERVICE_URL` variable |
+| Multiforum scanner secret | Matching `SCAN_API_KEY` secrets in both protected production environments |
 
 Terraform deliberately manages secret containers and access policies but not
 secret values. This prevents plaintext keys from being written into Terraform
@@ -66,8 +66,6 @@ Create a GitHub environment named `production`. Add:
 - `SCAN_API_KEY`: at least 32 random characters. Store this in a password
   manager because the Multiforum plugin must receive the identical value.
 - `SCAN_VIRUSTOTAL_API_KEY`: the VirusTotal API key used only by the scanner.
-- `MULTIFORUM_OAUTH_CLIENT_SECRET`: the client secret for the narrowly scoped
-  Multiforum plugin-configuration automation identity.
 
 For example, generate the shared scanner key locally with:
 
@@ -79,46 +77,22 @@ openssl rand -hex 32
 
 - `SCAN_TEST_FILE_URL`: a stable, non-sensitive URL for a known-safe ZIP test
   fixture. The default deployment requires it and expects a `clean` verdict.
-- `MULTIFORUM_GRAPHQL_URL`: the production Multiforum GraphQL endpoint.
-- `MULTIFORUM_OAUTH_TOKEN_URL`: the OAuth provider's HTTPS token endpoint.
-- `MULTIFORUM_OAUTH_CLIENT_ID`: the automation application's client ID.
-- `MULTIFORUM_OAUTH_AUDIENCE`: the Multiforum API audience.
-
-The Multiforum backend must allowlist the automation token's exact `sub` claim
-in `PLUGIN_CONFIGURATION_AUTOMATION_SUBJECTS`. The identity must receive only
-the `plugin-configuration:write` permission. It can call the reconciliation
-preview and apply operations, but it is not a Multiforum user and cannot call
-other administrative operations.
 
 Optional repository variables are:
 
 - `CLOUD_RUN_SERVICE` (default `security-scan-service`)
 - `ARTIFACT_REPOSITORY` (default `multiforum-services`)
-- `SCAN_BLOCK_ON` (`malicious` by default; may be `suspicious`)
-- `SCAN_ON_ERROR` (`block` by default; may be `allow`)
 
 ## Deploy
 
 Run **Deploy security scanner** from the repository's Actions tab. The workflow
 is intentionally manual until the production integration is stable.
 
-A successful run prints the Cloud Run URL and reconciliation result in its job
-summary. After service verification, the workflow installs/enables
-`security-attachment-scan` v0.5.1 and reconciles the URL, security policy,
-matching `SCAN_SERVICE_API_KEY`, and all three server download pipelines
-without writing the key to the manifest, Terraform state, or logs.
-
-The desired state is authoritative for the complete server pipeline list. It
-matches the imported production topology: the security scanner is the only
-step for `downloadableFile.created`, `downloadableFile.updated`, and
-`downloadableFile.downloaded`; each pipeline stops on failure and uses
-`ALL_FILES_IMMEDIATE`. Generated `effectiveAt` and `policyId` values remain
-server-owned and are intentionally omitted, preventing perpetual drift.
-
-Because reconciliation replaces the complete server pipeline list, add any
-future server-scoped plugin pipeline to the renderer before deploying it. A
-manually added server pipeline that is absent from this desired state will be
-reported as drift and removed by the next successful deployment.
+A successful run prints the Cloud Run URL and a link to the central production
+plugin reconciliation workflow. Update that workflow's protected
+`SCAN_SERVICE_URL` variable with the deployed URL, then run its plan/apply flow.
+The central reviewed template owns the scanner version, security policy,
+matching plugin secret, and all shared plugin pipelines.
 
 ## Verify or diagnose from a terminal
 
@@ -137,10 +111,10 @@ The verifier never prints the API key or test-file URL.
 ## Secret rotation
 
 1. Replace the relevant GitHub `production` environment secret.
-2. Run the deployment workflow.
-3. The workflow updates the Cloud Run secret and Multiforum's matching
-   `SCAN_SERVICE_API_KEY` in the same run.
-4. Confirm the reconciliation summary, then retry a quarantined test download.
+2. Run the deployment workflow to update the Cloud Run secret.
+3. Copy the identical `SCAN_API_KEY` value to the backend repository's protected
+   production environment and run the central plugin configuration apply.
+4. Confirm both summaries, then retry a quarantined test download.
 
 Secret Manager retains older versions for recovery and audit purposes. Disable
 old versions after the new configuration has been verified.
