@@ -95,12 +95,7 @@ Still required in the GitHub production environment:
   secrets.SCAN_API_KEY
   secrets.SCAN_VIRUSTOTAL_API_KEY
   vars.SCAN_TEST_FILE_URL
-  vars.MULTIFORUM_GRAPHQL_URL
-  vars.MULTIFORUM_OAUTH_TOKEN_URL
-  vars.MULTIFORUM_OAUTH_CLIENT_ID
-  secrets.MULTIFORUM_OAUTH_CLIENT_SECRET
-  vars.MULTIFORUM_OAUTH_AUDIENCE
 
-Keep a secure copy of SCAN_API_KEY: Multiforum must use the same value as its
-security-attachment-scan plugin secret.
+Keep a secure copy of SCAN_API_KEY: the central Multiforum production plugin
+configuration workflow must use the same value.
 EOF
